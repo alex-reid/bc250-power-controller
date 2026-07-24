@@ -26,15 +26,15 @@ void PulseLED::begin() {
 
   #if defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR >= 3)
     ledcAttach(_pin, 5000, 8);
-    ledcWrite(_pin, 0);
   #else
     ledcSetup(_channel, 5000, 8);
     ledcAttachPin(_pin, _channel);
-    ledcWrite(_channel, 0);
   #endif
 #else
   pinMode(_pin, OUTPUT);
 #endif
+
+  writeRaw(0);
 }
 
 void PulseLED::setPeriod(unsigned long period) {
@@ -46,7 +46,11 @@ void PulseLED::setRange(uint8_t minBrightness, uint8_t maxBrightness) {
   _maxBrightness = maxBrightness;
 }
 
-void PulseLED::setBrightness(uint8_t brightness) {
+void PulseLED::setFadeDuration(unsigned long fadeDurationMs) {
+  _fadeDurationMs = fadeDurationMs;
+}
+
+void PulseLED::writeRaw(uint8_t brightness) {
 #if defined(ARDUINO_ARCH_ESP32)
   #if defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR >= 3)
     ledcWrite(_pin, brightness);
@@ -56,6 +60,43 @@ void PulseLED::setBrightness(uint8_t brightness) {
 #else
   analogWrite(_pin, brightness);
 #endif
+
+  _currentBrightness = brightness;
+}
+
+void PulseLED::setBrightness(uint8_t brightness) {
+  const unsigned long now = millis();
+
+  if (brightness != _targetBrightness) {
+    _fadeStartBrightness = _currentBrightness;
+    _targetBrightness = brightness;
+    _fadeStartMs = now;
+    _fadeActive = (_fadeDurationMs > 0) && (_fadeStartBrightness != _targetBrightness);
+
+    if (!_fadeActive) {
+      writeRaw(_targetBrightness);
+      return;
+    }
+  }
+
+  if (_fadeActive) {
+    const unsigned long elapsed = now - _fadeStartMs;
+    if (elapsed >= _fadeDurationMs) {
+      _fadeActive = false;
+      writeRaw(_targetBrightness);
+      return;
+    }
+
+    const int start = (int)_fadeStartBrightness;
+    const int delta = (int)_targetBrightness - start;
+    const int stepped = start + (int)((delta * (int)elapsed) / (int)_fadeDurationMs);
+    writeRaw((uint8_t)stepped);
+    return;
+  }
+
+  if (_currentBrightness != _targetBrightness) {
+    writeRaw(_targetBrightness);
+  }
 }
 
 void PulseLED::update() {
@@ -66,5 +107,7 @@ void PulseLED::update() {
   const uint8_t brightness =
       _minBrightness + (uint8_t)(wave * (_maxBrightness - _minBrightness));
 
-  setBrightness(brightness);
+  _fadeActive = false;
+  _targetBrightness = brightness;
+  writeRaw(brightness);
 }
