@@ -9,6 +9,7 @@ public:
 
     void begin();
     void update();
+    void setBrightness(uint8_t brightness);
 
     void setPeriod(unsigned long period);
     void setRange(uint8_t minBrightness, uint8_t maxBrightness);
@@ -18,6 +19,12 @@ private:
     unsigned long _period = 2000;
     uint8_t _minBrightness = 0;
     uint8_t _maxBrightness = 255;
+
+#if defined(ARDUINO_ARCH_ESP32)
+    uint8_t _channel = 0;
+
+    static uint8_t nextChannel();
+#endif
 };
 
 #endif

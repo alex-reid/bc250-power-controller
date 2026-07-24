@@ -160,21 +160,21 @@ void PowerController::serviceButton(unsigned long now) {
 }
 
 void PowerController::serviceLed() {
-  switch (_state) {
-    case SystemState::Off:
-      digitalWrite(LED_PIN, LOW);
-      break;
-    case SystemState::On:
-      digitalWrite(LED_PIN, HIGH);
-      break;
-    case SystemState::Booting:
-    case SystemState::Bc250On:
-    case SystemState::Sleeping:
-    case SystemState::ShuttingDown:
-    case SystemState::Bc250Off:
+  // switch (_state) {
+  //   case SystemState::Off:
+  //     _statusLed.setBrightness(0);
+  //     break;
+  //   case SystemState::On:
+  //     _statusLed.setBrightness(255);
+  //     break;
+  //   case SystemState::Booting:
+  //   case SystemState::Bc250On:
+  //   case SystemState::Sleeping:
+  //   case SystemState::ShuttingDown:
+  //   case SystemState::Bc250Off:
       _statusLed.update();
-      break;
-  }
+  //     break;
+  // }
 }
 
 void PowerController::serviceFinalPowerDown() {

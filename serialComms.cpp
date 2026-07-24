@@ -4,22 +4,30 @@
 #include <stdlib.h>
 
 static bool g_debugMode = false;
+static HardwareSerial* g_port = &Serial2;
 
 void initSerialComms(uint8_t rxPin, uint8_t txPin, bool debugEnable) {
   g_debugMode = debugEnable;
-  Serial.begin(9600);
+  g_port->begin(9600, SERIAL_8N1, rxPin, txPin);
+
+  if (g_debugMode) {
+    DBG_PRINT(F("[Serial] BC250 UART on Serial2 RX="));
+    DBG_PRINT(rxPin);
+    DBG_PRINT(F(" TX="));
+    DBG_PRINTLN(txPin);
+  }
 }
 
 int checkSerialCommand() {
-  // if (g_port == nullptr) return -1;
+  if (g_port == nullptr) return -1;
 
   static bool control = false;
   static bool startRx = false;
   static char hexBuffer[3];
   static uint8_t hexCount = 0;
 
-  while (Serial.available() > 0) {
-    const char inByte = (char)Serial.read();
+  while (g_port->available() > 0) {
+    const char inByte = (char)g_port->read();
 
     if (inByte == 'c') {
       control = true;
