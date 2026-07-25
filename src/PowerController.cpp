@@ -33,7 +33,7 @@ void PowerController::begin() {
   _button.begin();
 
   // Optional debug console
-  DBG_BEGIN(9600);
+  DBG_BEGIN(115200);
   #if DEBUG_MODE
     DBG_PRINTLN(F("--- DEBUG MODE ACTIVE ---"));
   #endif
