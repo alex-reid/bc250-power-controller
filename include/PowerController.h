@@ -23,10 +23,11 @@ public:
   PowerController();
   void begin();
   void update();
+  SystemState _state;
+  void startPowerOnSequence();
 
 private:
   // Core state
-  SystemState _state;
   ButtonMode _buttonMode;
 
   // Components
@@ -53,7 +54,6 @@ private:
   void setBc250Button(bool pressed);
   bool readBc250Powered() const;
 
-  void startPowerOnSequence();
   void serviceStartupSequence(unsigned long now);
 
   void pulseBc250Button(unsigned long pressMs);
