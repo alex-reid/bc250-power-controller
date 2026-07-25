@@ -1,6 +1,6 @@
 # bc250-power-controller
 
-Arduino-based power controller for an AMD BC250 system using a Metalfish Flex500 PSU.
+ESP32-based power controller for an AMD BC250 system using a Metalfish Flex500 PSU.
 
 This project manages ATX power sequencing, BC250 button control, front-panel button passthrough, serial state signals from the host OS, and LED status indication via a non-blocking state machine.
 
@@ -10,8 +10,9 @@ This project manages ATX power sequencing, BC250 button control, front-panel but
 - Explicit system state machine
 - Front button debounce and long-press hard-off
 - BC250 button pulse generation for startup
+- Classic Bluetooth controller wake detection on ESP32
 - Optional debug logging over hardware `Serial`
-- Required BC250 command input over `SoftwareSerial`
+- Required BC250 command input over ESP32 `Serial2`
 - Modular structure (`.h/.cpp`) for maintainability
 
 ## Hardware Overview
@@ -124,46 +125,42 @@ There are some helper scripts in the `./shell_scripts` directory for finding con
 
 ## Project Structure
 
-- `bc250-power-v2.ino` – sketch entrypoint
+- `bc250-power-controller.ino` – sketch entrypoint
 - `PowerController.h/.cpp` – state machine and orchestration
 - `ButtonInput.h/.cpp` – debounce + edge tracking
-- `serialComms.h/.cpp` – `SoftwareSerial` command parser
+- `serialComms.h/.cpp` – BC250 command parser on ESP32 `Serial2`
 - `PulseLED.h/.cpp` – non-blocking sine-wave LED pulse
+- `ControllerWakeupLib.h/.cpp` – Classic Bluetooth wake detection and allow-list handling
 - `config.h` – pins, timings, feature flags
 - `Debug.h` – optional debug print macros
 
 ## Configuration
 
-Edit constants in `config.h`:
+Edit constants in `include/config.h`:
 
 - Pin assignments
 - Debounce/press timing values
 - `DEBUG_MODE` on/off
 - LED pulse range/period
 
-### UNO vs ATtiny84
+### ESP32 Notes
 
-Recommended workflow:
-
-- Use **UNO** for easier bring-up and debug output
-- Use **ATtiny84** for final embedded deployment
-
-For ATtiny84:
-
-- Keep `SoftwareSerial` enabled for BC250 input
-- Hardware `Serial` debug is optional
-- Verify your selected `LED_PIN` supports PWM in your board core/pin map
-- Confirm pin numbering matches your installed ATtiny core conventions
+- The active PlatformIO target is `nodemcu-32s` on the `espressif32` platform.
+- BC250 serial input uses ESP32 UART2 (`Serial2`) with:
+  - `SERIAL_RX = 16`
+  - `SERIAL_TX = 17`
+- Debug logging uses the normal ESP32 USB serial console at `115200` baud.
+- Bluetooth controller wake depends on ESP32 Classic Bluetooth support and is only active while the system state is `Off`.
+- The commented legacy AVR pin block in `config.h` is reference material only and is not part of the active build.
 
 ## Build / Upload
 
-1. Open project in Arduino IDE (or PlatformIO equivalent).
-2. Select board and processor:
-   - UNO for debug phase
-   - ATtiny84 (with your chosen core) for final target
-3. Verify `config.h` pin mapping matches your wiring.
-4. Upload firmware.
-5. Open serial monitor (if `DEBUG_MODE=1`) at `9600` baud for logs.
+1. Open the project in PlatformIO or VS Code.
+2. Verify the `nodemcu-32s` environment in `platformio.ini` matches your hardware.
+3. Confirm the pin mapping in `include/config.h` matches your wiring.
+4. Build with `pio run`.
+5. Upload with `pio run -t upload`.
+6. Open the debug console with `pio device monitor -b 115200` when `DEBUG_MODE=1`.
 
 ## Wiring Checklist
 
@@ -180,14 +177,15 @@ For ATtiny84:
   - Check BC250 rail sense polarity and pin mapping
 - No serial command reactions:
   - Validate incoming frames are exactly `c:XX`
-  - Confirm `SERIAL_RX` wiring and baud (`9600`)
+  - Confirm ESP32 `Serial2` wiring on `SERIAL_RX`/`SERIAL_TX` and baud (`9600`)
 - LED not pulsing:
   - Confirm `LED_PIN` is PWM-capable
 - Random behavior on button:
   - Verify grounding and switch wiring
   - Increase `DEBOUNCE_MS` slightly if needed
-- ATtiny-specific oddities:
-  - Re-check board core pin numbering and timer/PWM capabilities
+- Bluetooth wake not triggering:
+  - Confirm the spoofed PC MAC and allowed controller MACs in `PowerController.cpp`
+  - Make sure Bluetooth is only being used by this firmware while the controller is in `Off`
 
 ## Current Status
 
