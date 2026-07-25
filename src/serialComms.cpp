@@ -1,22 +1,21 @@
 #include "serialComms.h"
 #include "Debug.h"
-#include <SoftwareSerial.h>
 #include <ctype.h>
 #include <stdlib.h>
 
-static SoftwareSerial* g_port = nullptr;
 static bool g_debugMode = false;
-
-// No heap allocation: static instance created on first init call.
-static SoftwareSerial* acquirePort(uint8_t rxPin, uint8_t txPin) {
-  static SoftwareSerial port(rxPin, txPin);
-  return &port;
-}
+static HardwareSerial* g_port = &Serial2;
 
 void initSerialComms(uint8_t rxPin, uint8_t txPin, bool debugEnable) {
   g_debugMode = debugEnable;
-  g_port = acquirePort(rxPin, txPin);
-  g_port->begin(9600);
+  g_port->begin(9600, SERIAL_8N1, rxPin, txPin);
+
+  if (g_debugMode) {
+    DBG_PRINT(F("[Serial] BC250 UART on Serial2 RX="));
+    DBG_PRINT(rxPin);
+    DBG_PRINT(F(" TX="));
+    DBG_PRINTLN(txPin);
+  }
 }
 
 int checkSerialCommand() {
@@ -26,8 +25,6 @@ int checkSerialCommand() {
   static bool startRx = false;
   static char hexBuffer[3];
   static uint8_t hexCount = 0;
-
-  g_port->listen();
 
   while (g_port->available() > 0) {
     const char inByte = (char)g_port->read();

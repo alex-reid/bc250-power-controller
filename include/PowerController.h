@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include "PulseLED.h"
 #include "ButtonInput.h"
+#include "ControllerWakeupLib.h"
 
 enum class ButtonMode : uint8_t {
   Standard,
@@ -23,37 +24,42 @@ public:
   PowerController();
   void begin();
   void update();
-
-private:
-  // Core state
+  
+  private:
   SystemState _state;
+  static PowerController* _instance;
+  
+  // Core state
   ButtonMode _buttonMode;
-
+  
   // Components
   PulseLED _statusLed;
   ButtonInput _button;
-
+  
   // Button press tracking
   bool _pressHandled;
   unsigned long _buttonPressStart;
-
+  
   // BC250 pulse state
   bool _bc250PulseActive;
   unsigned long _bc250PulseStart;
   unsigned long _bc250PulseDuration;
-
+  
   // Startup sequence state
   bool _startupSequenceActive;
   unsigned long _startupAtxOnTime;
-
+  
+  // Controller wake detector
+  ControllerWakeupLib _wakeup;
+  
   // Helpers
   void enterState(SystemState newState);
-
+  
+  void startPowerOnSequence();
   void setAtxPower(bool on);
   void setBc250Button(bool pressed);
   bool readBc250Powered() const;
 
-  void startPowerOnSequence();
   void serviceStartupSequence(unsigned long now);
 
   void pulseBc250Button(unsigned long pressMs);
@@ -61,6 +67,10 @@ private:
 
   void serviceSerial();
   bool shouldPollSerial() const;
+  void serviceWakeup();
+
+  static void onControllerWake(const MacAddress &controllerMac);
+  void handleControllerWake(const MacAddress &controllerMac);
 
   void serviceRailTracking();
   void serviceButton(unsigned long now);

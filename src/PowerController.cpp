@@ -3,6 +3,14 @@
 #include "serialComms.h"
 #include "Debug.h"
 
+PowerController* PowerController::_instance = nullptr;
+
+namespace {
+constexpr MacAddress kPcMac = {{0xAC, 0xA7, 0xF1, 0xE4, 0x55, 0xB9}};
+constexpr MacAddress kPs5ControllerMac = {{0x0C, 0x27, 0x56, 0x3D, 0xB1, 0x44}};
+constexpr MacAddress kSwitchProControllerMac = {{0xD0, 0x55, 0x09, 0x29, 0xCB, 0x92}};
+}
+
 PowerController::PowerController()
   : _state(SystemState::Off),
     _buttonMode(ButtonMode::Standard),
@@ -14,9 +22,12 @@ PowerController::PowerController()
     _bc250PulseStart(0),
     _bc250PulseDuration(0),
     _startupSequenceActive(false),
-    _startupAtxOnTime(0) {}
+    _startupAtxOnTime(0),
+    _wakeup(true) {}
 
 void PowerController::begin() {
+  _instance = this;
+
   pinMode(LED_PIN, OUTPUT);
   pinMode(BC_250_POWERED_PIN, INPUT);
   pinMode(ATX_P_ON_PIN, OUTPUT);
@@ -33,7 +44,7 @@ void PowerController::begin() {
   _button.begin();
 
   // Optional debug console
-  DBG_BEGIN(9600);
+  DBG_BEGIN(115200);
   #if DEBUG_MODE
     DBG_PRINTLN(F("--- DEBUG MODE ACTIVE ---"));
   #endif
@@ -41,12 +52,21 @@ void PowerController::begin() {
   // Required BC250 serial receiver
   initSerialComms(SERIAL_RX, SERIAL_TX, DEBUG_MODE);
 
+  // Controller wake detector setup.
+  _wakeup.begin();
+  _wakeup.setWakeCallback(onControllerWake);
+  _wakeup.updatePcMAC(kPcMac);
+  _wakeup.clearControllers();
+  _wakeup.addController(kPs5ControllerMac);
+  _wakeup.addController(kSwitchProControllerMac);
+
   enterState(SystemState::Off);
 }
 
 void PowerController::update() {
   const unsigned long now = millis();
 
+  serviceWakeup();
   serviceBc250Pulse(now);
   serviceStartupSequence(now);
   serviceRailTracking();
@@ -58,6 +78,35 @@ void PowerController::update() {
 
   serviceLed();
   serviceFinalPowerDown();
+}
+
+void PowerController::serviceWakeup() {
+  if (_state == SystemState::Off) {
+    _wakeup.enableBluetooth();
+  } else {
+    _wakeup.disableBluetooth();
+  }
+
+  _wakeup.process();
+}
+
+void PowerController::onControllerWake(const MacAddress &controllerMac) {
+  if (_instance != nullptr) {
+    _instance->handleControllerWake(controllerMac);
+  }
+}
+
+void PowerController::handleControllerWake(const MacAddress &controllerMac) {
+  if (_state == SystemState::Off) {
+    startPowerOnSequence();
+  }
+
+  char macBuf[18];
+  snprintf(macBuf, sizeof(macBuf), "%02X:%02X:%02X:%02X:%02X:%02X",
+           controllerMac.bytes[0], controllerMac.bytes[1], controllerMac.bytes[2],
+           controllerMac.bytes[3], controllerMac.bytes[4], controllerMac.bytes[5]);
+  DBG_PRINT(F("[Wake] Controller wake from "));
+  DBG_PRINTLN(macBuf);
 }
 
 bool PowerController::shouldPollSerial() const {
@@ -162,10 +211,10 @@ void PowerController::serviceButton(unsigned long now) {
 void PowerController::serviceLed() {
   switch (_state) {
     case SystemState::Off:
-      digitalWrite(LED_PIN, LOW);
+      _statusLed.setBrightness(0);
       break;
     case SystemState::On:
-      digitalWrite(LED_PIN, HIGH);
+      _statusLed.setBrightness(255);
       break;
     case SystemState::Booting:
     case SystemState::Bc250On:
